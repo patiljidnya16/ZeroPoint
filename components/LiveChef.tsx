@@ -3,41 +3,44 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage, Type, FunctionDeclaration } from '@google/genai';
 import { encode, decode, decodeAudioData } from '../utils/audioUtils';
 
-const TOOLS: FunctionDeclaration[] = [
-  {
-    name: 'add_ingredient',
-    parameters: {
-      type: Type.OBJECT,
-      description: 'Adds an ingredient to your food list.',
-      properties: {
-        name: { type: Type.STRING, description: 'The name of the ingredient.' },
-        listType: { type: Type.STRING, enum: ['priority', 'pantry'], description: 'Which list to add it to.' }
-      },
-      required: ['name', 'listType'],
+const TOOLS: FunctionDeclaration = {
+  name: 'add_ingredient',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Adds an ingredient to the user\'s rescue list or pantry.',
+    properties: {
+      name: { type: Type.STRING, description: 'The name of the ingredient.' },
+      listType: { type: Type.STRING, enum: ['priority', 'pantry'], description: 'Which list to add it to.' }
     },
+    required: ['name', 'listType'],
   },
-  {
-    name: 'get_cooking_context',
-    parameters: {
-      type: Type.OBJECT,
-      description: 'Retrieves the current meal plan and recipes.',
-      properties: {},
-    }
-  }
-];
+};
+
+const CONTEXT_TOOL: FunctionDeclaration = {
+  name: 'get_kitchen_context',
+  description: 'Retrieves current ingredients and the active meal plan generated on the dashboard to help guide the user.',
+  parameters: { type: Type.OBJECT, properties: {} }
+};
+
+const GeminiDots: React.FC<{ active: boolean }> = ({ active }) => (
+  <div className="flex items-center justify-center space-x-4 h-28">
+    <div className={`w-4 h-4 rounded-full bg-[#4285F4] transition-all duration-700 ease-in-out ${active ? 'animate-dot-flow [animation-delay:-0.4s] h-16 shadow-[0_0_30px_rgba(66,133,244,0.6)]' : 'opacity-20 scale-75'}`} />
+    <div className={`w-4 h-4 rounded-full bg-[#EA4335] transition-all duration-700 ease-in-out ${active ? 'animate-dot-flow [animation-delay:-0.2s] h-20 shadow-[0_0_30px_rgba(234,67,53,0.6)]' : 'opacity-20 scale-75'}`} />
+    <div className={`w-4 h-4 rounded-full bg-[#FBBC05] transition-all duration-700 ease-in-out ${active ? 'animate-dot-flow [animation-delay:-0.1s] h-24 shadow-[0_0_30px_rgba(251,188,5,0.6)]' : 'opacity-20 scale-75'}`} />
+    <div className={`w-4 h-4 rounded-full bg-[#34A853] transition-all duration-700 ease-in-out ${active ? 'animate-dot-flow h-20 shadow-[0_0_30px_rgba(52,168,83,0.6)]' : 'opacity-20 scale-75'}`} />
+  </div>
+);
 
 const LiveChef: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isActive, setIsActive] = useState(false);
-  const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [transcript, setTranscript] = useState<{ text: string; isUser: boolean }[]>([]);
   const [currentInput, setCurrentInput] = useState('');
   const [currentOutput, setCurrentOutput] = useState('');
 
-  const sessionRef = useRef<any>(null);
+  const sessionPromiseRef = useRef<Promise<any> | null>(null);
   const inputAudioCtxRef = useRef<AudioContext | null>(null);
   const outputAudioCtxRef = useRef<AudioContext | null>(null);
-  const outputNodeRef = useRef<GainNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -54,29 +57,23 @@ const LiveChef: React.FC = () => {
       currentPlanRef.current = e.detail.result;
     };
     window.addEventListener('chef-context', handleContext);
-    return () => {
-      window.removeEventListener('chef-context', handleContext);
-    };
+    return () => window.removeEventListener('chef-context', handleContext);
   }, []);
 
   const toggleSession = async () => {
     if (isActive) {
       stopSession();
     } else {
-      startSession();
+      await startSession();
     }
   };
 
   const startSession = async () => {
     try {
-      // Create a new GoogleGenAI instance right before making an API call to ensure it always uses the most up-to-date API key.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Use (window as any) to avoid TypeScript errors when accessing webkitAudioContext
       inputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       outputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      outputNodeRef.current = outputAudioCtxRef.current.createGain();
-      outputNodeRef.current.connect(outputAudioCtxRef.current.destination);
       
       await inputAudioCtxRef.current.resume();
       await outputAudioCtxRef.current.resume();
@@ -89,17 +86,25 @@ const LiveChef: React.FC = () => {
           responseModalities: [Modality.AUDIO],
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          tools: [{ functionDeclarations: TOOLS }],
+          tools: [{ functionDeclarations: [TOOLS, CONTEXT_TOOL] }],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: `You are 'Chef', the ZeroPoint Proactive Agent.
-          
-          AGENTIC BEHAVIOR:
-          1. PROACTIVITY: If the user mentions an ingredient, don't just add it. Suggest a way to use its scraps (e.g., if they add carrots, suggest making carrot-top pesto).
-          2. RECIPE CHAINING: If they ask for help with a recipe, look for ways to double-batch prep components for the next meal in their plan.
-          3. VOICE: Professional, energetic, and eco-conscious. Use simple but high-impact language.
-          4. CONTEXT: Use 'get_cooking_context' to see what they are supposed to be cooking before answering cooking questions.`,
+          systemInstruction: `You are 'ChefCo', a high-fidelity real-time AI cooking assistant embedded inside a zero-waste web app.
+
+ROLE: Professional Chef + Supportive Mentor.
+MISSION: Guide users step-by-step, adapt recipes dynamically to mistakes, and keep users calm and confident.
+
+🍳 CORE BEHAVIOR:
+1. START COOKING: When the user starts, check context with 'get_kitchen_context'.
+2. ONE STEP AT A TIME: Show and read the current step clearly. Never overwhelm.
+3. ERROR-ADAPTATION: If the user says "I overcooked it", "it's too salty", or "something went wrong":
+   - Acknowledge calmly ("No worries—this happens. Let's fix it.")
+   - ADJUST: Modify temperature, add ingredients (e.g., milk/stock to soften), or change steps.
+   - RECOVER: Offer tips instead of starting over.
+4. TONE: Professional, supportive, encouraging, and reassuring.
+
+CONTEXT MEMORY: Remember substitutions or previous mistakes mentioned in this turn.`,
         },
         callbacks: {
           onopen: () => {
@@ -118,10 +123,12 @@ const LiveChef: React.FC = () => {
                 data: encode(new Uint8Array(int16.buffer)),
                 mimeType: 'audio/pcm;rate=16000',
               };
-              // CRITICAL: Solely rely on sessionPromise resolves and then call `session.sendRealtimeInput`, **do not** add other condition checks.
-              sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob }));
+              
+              sessionPromiseRef.current?.then((session) => {
+                session.sendRealtimeInput({ media: pcmBlob });
+              });
             };
-
+            
             source.connect(scriptProcessor);
             scriptProcessor.connect(inputAudioCtxRef.current!.destination);
           },
@@ -142,137 +149,188 @@ const LiveChef: React.FC = () => {
             if (message.toolCall) {
               for (const fc of message.toolCall.functionCalls) {
                 if (fc.name === 'add_ingredient') {
-                  const { name, listType } = fc.args as any;
-                  window.dispatchEvent(new CustomEvent('chef-action', { 
-                    detail: { type: 'ADD_INGREDIENT', name, listType: listType || 'priority' } 
+                  window.dispatchEvent(new CustomEvent('chef-action', { detail: fc.args }));
+                  sessionPromiseRef.current?.then(s => s.sendToolResponse({
+                    functionResponses: { id: fc.id, name: fc.name, response: { result: "ChefCo has added it to your dashboard." } }
                   }));
-                  sessionPromise.then(s => s.sendToolResponse({
-                    functionResponses: { id: fc.id, name: fc.name, response: { result: "Done." } }
+                } else if (fc.name === 'get_kitchen_context') {
+                  sessionPromiseRef.current?.then(s => s.sendToolResponse({
+                    functionResponses: { id: fc.id, name: fc.name, response: { context: currentPlanRef.current || "No plan yet." } }
                   }));
-                } else if (fc.name === 'get_cooking_context') {
-                  setTimeout(() => {
-                    sessionPromise.then(s => s.sendToolResponse({
-                      functionResponses: { id: fc.id, name: fc.name, response: { plan: currentPlanRef.current || "No plan active." } }
-                    }));
-                  }, 200);
                 }
               }
             }
 
-            const parts = message.serverContent?.modelTurn?.parts;
-            if (parts) {
-              for (const part of parts) {
-                const base64Audio = part.inlineData?.data;
-                if (base64Audio) {
-                  setIsModelSpeaking(true);
-                  const ctx = outputAudioCtxRef.current!;
-                  // Always schedule the next audio chunk to start at the exact end time of the previous one
-                  nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-                  try {
-                    const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
-                    const source = ctx.createBufferSource();
-                    source.buffer = audioBuffer;
-                    source.connect(outputNodeRef.current!);
-                    source.onended = () => {
-                      sourcesRef.current.delete(source);
-                      if (sourcesRef.current.size === 0) setIsModelSpeaking(false);
-                    };
-                    source.start(nextStartTimeRef.current);
-                    nextStartTimeRef.current += audioBuffer.duration;
-                    sourcesRef.current.add(source);
-                  } catch (e) {}
-                }
+            const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+            if (base64Audio) {
+              const ctx = outputAudioCtxRef.current!;
+              nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
+              
+              try {
+                const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
+                const source = ctx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(ctx.destination);
+                
+                source.onended = () => {
+                  sourcesRef.current.delete(source);
+                };
+                
+                source.start(nextStartTimeRef.current);
+                nextStartTimeRef.current += audioBuffer.duration;
+                sourcesRef.current.add(source);
+              } catch (e) {
+                console.error("Audio decoding error:", e);
               }
             }
 
             if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+              sourcesRef.current.forEach(s => {
+                try { s.stop(); } catch(err) {}
+              });
               sourcesRef.current.clear();
               nextStartTimeRef.current = 0;
-              setIsModelSpeaking(false);
             }
           },
-          onerror: () => stopSession(),
-          onclose: () => stopSession(),
+          onerror: (e) => {
+            console.error("Live API Error:", e);
+            stopSession();
+          },
+          onclose: () => {
+            stopSession();
+          },
         }
       });
-      sessionRef.current = sessionPromise;
+      sessionPromiseRef.current = sessionPromise;
     } catch (err) {
+      console.error("Failed to start session:", err);
       stopSession();
     }
   };
 
   const stopSession = () => {
     setIsActive(false);
-    setIsModelSpeaking(false);
-    sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
+    sourcesRef.current.forEach(s => {
+      try { s.stop(); } catch(e) {}
+    });
     sourcesRef.current.clear();
+    nextStartTimeRef.current = 0;
+
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
       scriptProcessorRef.current = null;
     }
     micStreamRef.current?.getTracks().forEach(track => track.stop());
-    sessionRef.current?.then((session: any) => session.close());
+    micStreamRef.current = null;
+
+    sessionPromiseRef.current?.then((session) => {
+      session.close();
+    });
+    sessionPromiseRef.current = null;
+
     inputAudioCtxRef.current?.close();
     outputAudioCtxRef.current?.close();
-    sessionRef.current = null;
+    inputAudioCtxRef.current = null;
+    outputAudioCtxRef.current = null;
+
     setTranscript([]);
-    setCurrentInput('');
-    setCurrentOutput('');
   };
 
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-8 right-8 z-[60] p-7 rounded-[2rem] shadow-2xl transition-all duration-500 transform hover:scale-110 active:scale-95 ${isActive ? 'bg-forest ring-8 ring-lime/20' : 'bg-forest-dark dark:bg-lime text-cream dark:text-forest-dark'}`}
+        className={`fixed bottom-10 right-10 z-[100] p-6 rounded-full shadow-[0_30px_60px_rgba(0,0,0,0.4)] bg-white dark:bg-forest transition-all hover:scale-110 active:scale-95 border-2 ${isActive ? 'border-lime ring-8 ring-lime/20' : 'border-sand dark:border-forest/40'} flex items-center justify-center group`}
       >
-        <div className="relative flex items-center justify-center">
-          <svg className={`w-8 h-8 ${isActive ? 'text-lime animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-          </svg>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#4285F4]/10 to-[#34A853]/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <svg className="w-10 h-10 text-forest dark:text-cream relative z-10" viewBox="0 0 24 24" fill="none">
+           <path stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" d="M12 5v14M5 12h14" className={isActive ? 'animate-pulse text-[#34A853]' : ''} />
+        </svg>
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="absolute inset-0 bg-forest-dark/80 backdrop-blur-xl" onClick={() => setIsOpen(false)}></div>
-          <div className="relative bg-cream dark:bg-forest-dark w-full max-w-xl md:rounded-[4rem] rounded-t-[4rem] shadow-2xl overflow-hidden animate-grow h-[85vh] md:h-auto md:max-h-[90vh] flex flex-col border border-white/10">
-            <div className="h-2 flex w-full">
-              <div className={`flex-1 transition-all duration-700 h-full ${isActive ? 'bg-lime opacity-100' : 'opacity-0'}`} />
-            </div>
-            <div className="p-12 flex-grow flex flex-col overflow-hidden">
-              <div className="flex justify-between items-center mb-10">
-                <h3 className="text-sm font-black text-forest-dark/40 dark:text-cream/30 tracking-widest uppercase">Agent Chef</h3>
-                <button onClick={() => { stopSession(); setIsOpen(false); }} className="p-4 bg-sand dark:bg-white/5 rounded-3xl text-forest-dark dark:text-cream">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+        <div className="fixed inset-0 z-[110] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl" onClick={() => { stopSession(); setIsOpen(false); }} />
+          <div className="relative bg-white dark:bg-[#121214] w-full max-w-5xl rounded-t-[5rem] shadow-[0_-30px_120px_rgba(0,0,0,0.7)] animate-grow border-t border-white/5 h-[85vh] flex flex-col overflow-hidden">
+            <div className="p-16 flex-grow flex flex-col relative">
+              
+              {/* ChefCo Header */}
+              <div className="flex justify-between items-center mb-12">
+                <div className="flex items-center space-x-5">
+                  <div className="flex -space-x-3">
+                    <div className="w-5 h-5 rounded-full bg-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]" />
+                    <div className="w-5 h-5 rounded-full bg-[#EA4335] shadow-[0_0_20px_rgba(234,67,53,0.4)]" />
+                    <div className="w-5 h-5 rounded-full bg-[#FBBC05] shadow-[0_0_20px_rgba(251,188,5,0.4)]" />
+                    <div className="w-5 h-5 rounded-full bg-[#34A853] shadow-[0_0_20px_rgba(52,168,83,0.4)]" />
+                  </div>
+                  <div>
+                    <span className="text-[14px] font-black uppercase tracking-[0.8em] dark:text-cream block">ChefCo Mentor</span>
+                    <span className="text-[11px] font-bold text-[#34A853] uppercase tracking-[0.2em] mt-1 block">Live Recovery Mode Active</span>
+                  </div>
+                </div>
+                <button onClick={() => { stopSession(); setIsOpen(false); }} className="p-5 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all group">
+                  <svg className="w-8 h-8 opacity-30 dark:text-cream group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={3} d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
-              <div className="flex-grow overflow-y-auto custom-scrollbar space-y-8 pb-8 px-2">
+
+              {/* Mentorship View */}
+              <div className="flex-grow overflow-y-auto px-6 space-y-16 custom-scrollbar mb-10">
+                {transcript.length === 0 && !currentInput && (
+                  <div className="animate-grow mt-12 max-w-2xl">
+                    <h2 className="text-7xl font-medium text-forest-dark dark:text-cream tracking-tighter leading-[1.05]">
+                      Take a breath. <br />
+                      <span className="opacity-20 italic font-serif">We're in this together.</span>
+                    </h2>
+                    <div className="mt-16 space-y-6">
+                      <p className="text-xs font-black uppercase tracking-[0.5em] opacity-40">Quick Mentor Actions:</p>
+                      <div className="flex flex-wrap gap-4">
+                        {[
+                          "Something went wrong!", 
+                          "What's the next step?", 
+                          "Explain this technique.", 
+                          "I overcooked it."
+                        ].map((hint, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => {
+                              if (!isActive) toggleSession();
+                              // In a real scenario, we might inject this text as a tool send
+                            }}
+                            className="bg-sand/30 dark:bg-forest/10 px-8 py-4 rounded-3xl text-sm font-bold border border-sand/50 dark:border-forest/20 hover:border-lime transition-all opacity-80 hover:opacity-100 shadow-sm"
+                          >
+                            {hint}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {transcript.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} animate-grow`}>
-                    <div className={`max-w-[85%] px-7 py-5 rounded-[2.5rem] text-sm font-bold leading-relaxed ${msg.isUser ? 'bg-forest text-cream' : 'bg-sand dark:bg-white/10 text-forest-dark dark:text-cream border border-forest/5'}`}>
+                  <div key={i} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] text-5xl font-medium tracking-tighter leading-[1.1] ${msg.isUser ? 'text-[#4285F4]' : 'text-forest-dark dark:text-cream'}`}>
                       {msg.text}
                     </div>
                   </div>
                 ))}
+                
+                {currentInput && <div className="text-5xl font-medium text-[#4285F4] opacity-40 italic tracking-tighter leading-[1.1]">{currentInput}...</div>}
                 <div ref={transcriptEndRef} />
               </div>
-              <div className="mt-auto pt-10 border-t border-sand dark:border-white/5 flex flex-col items-center">
-                <button 
-                  onClick={toggleSession} 
-                  className={`relative w-28 h-28 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl ${isActive ? 'bg-forest-dark text-lime scale-90 ring-12 ring-lime/5' : 'bg-lime text-forest-dark'}`}
-                >
-                   {isActive ? (
-                    <div className="flex space-x-2 items-center animate-pulse">
-                       <div className="w-2 h-10 bg-lime rounded-full"></div>
-                       <div className="w-2.5 h-16 bg-lime rounded-full"></div>
-                       <div className="w-2 h-10 bg-lime rounded-full"></div>
-                    </div>
-                  ) : (
-                    <svg className="w-14 h-14" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
-                  )}
+
+              {/* Interaction Sphere */}
+              <div className="mt-auto flex flex-col items-center">
+                <div className="w-full absolute bottom-0 left-0 h-3 gemini-gradient animate-gemini-glow opacity-90 blur-lg"></div>
+                <button onClick={toggleSession} className="transition-all hover:scale-105 active:scale-90 relative group">
+                   <div className={`absolute -inset-32 bg-gradient-to-tr from-[#4285F4]/20 via-[#FBBC05]/20 to-[#34A853]/20 rounded-full blur-[80px] transition-opacity duration-1000 ${isActive ? 'opacity-100' : 'opacity-0'}`}></div>
+                   <GeminiDots active={isActive} />
                 </button>
+                <div className="flex flex-col items-center space-y-4 mt-8 pb-10">
+                  <p className="text-[14px] font-black uppercase tracking-[1em] opacity-40 dark:text-cream ml-[1em]">
+                    {isActive ? 'ChefCo is Listening' : 'Consult Mentor'}
+                  </p>
+                  {isActive && <div className="w-2 h-2 rounded-full bg-[#34A853] animate-ping"></div>}
+                </div>
               </div>
             </div>
           </div>

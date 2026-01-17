@@ -4,98 +4,190 @@ import { generateWasteFreePlan, analyzeImage, searchRecipes, generateSpeech } fr
 import { Ingredient, PlannerResponse, UsedIngredient, Meal } from '../types';
 import { decode, decodeAudioData } from '../utils/audioUtils';
 
-const IngredientTag: React.FC<{ ingredient: UsedIngredient }> = ({ ingredient }) => {
-  const isPriority = ingredient.source === 'priority';
-  const isSwap = !!ingredient.substitutedFrom;
-  
+const Confetti = () => {
   return (
-    <div className="flex flex-col">
-      <span className={`group text-[10px] px-2.5 py-1 rounded-full flex items-center space-x-1.5 font-bold tracking-tight transition-all
-        ${isSwap ? 'bg-lime/20 text-forest border border-lime/40' : isPriority ? 'bg-spoil/10 text-spoil border border-spoil/20' : 'bg-leaf/20 text-forest-dark border border-leaf-dark/30'}`}>
-        {ingredient.name}
-        {isSwap && (
-          <span className="ml-1 opacity-60" title={`Substituted for ${ingredient.substitutedFrom}`}>
-            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-          </span>
-        )}
-      </span>
+    <div className="absolute inset-0 pointer-events-none z-[100] overflow-hidden">
+      {[...Array(30)].map((_, i) => (
+        <div
+          key={i}
+          className="absolute animate-float"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `-10%`,
+            backgroundColor: ['#B5E61D', '#A8D5BA', '#4A7C59', '#F4D03F', '#4285F4'][Math.floor(Math.random() * 5)],
+            width: `${Math.random() * 12 + 6}px`,
+            height: `${Math.random() * 12 + 6}px`,
+            borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+            animationDuration: `${Math.random() * 3 + 2}s`,
+            animationDelay: `${Math.random() * 1}s`,
+            transform: `rotate(${Math.random() * 360}deg)`
+          }}
+        />
+      ))}
     </div>
   );
 };
 
-const ImpactCard: React.FC<{ impact: any }> = ({ impact }) => (
-  <div className="bg-forest-dark text-cream p-8 rounded-[2.5rem] shadow-2xl border border-white/10 animate-grow grid grid-cols-3 gap-6">
-    <div className="text-center space-y-1">
-      <p className="text-[10px] font-black uppercase tracking-widest text-lime opacity-80">CO2 Saved</p>
-      <p className="text-3xl font-black">{impact.carbonSaved}kg</p>
-    </div>
-    <div className="text-center space-y-1 border-x border-white/10">
-      <p className="text-[10px] font-black uppercase tracking-widest text-lime opacity-80">Water Saved</p>
-      <p className="text-3xl font-black">{impact.waterSaved}L</p>
-    </div>
-    <div className="text-center space-y-1">
-      <p className="text-[10px] font-black uppercase tracking-widest text-lime opacity-80">Money Saved</p>
-      <p className="text-3xl font-black">${impact.moneySaved}</p>
-    </div>
-  </div>
-);
-
 const MealCard: React.FC<{ meal: Meal, type?: string, playTTS?: any }> = ({ meal, type, playTTS }) => {
   const [expanded, setExpanded] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [showConfetti, setShowConfetti] = useState(false);
   const audioId = `meal-${meal.title}`;
 
+  useEffect(() => {
+    const savedProgress = localStorage.getItem(`progress-${meal.title}`);
+    if (savedProgress) {
+      setCompletedSteps(JSON.parse(savedProgress));
+    }
+  }, [meal.title]);
+
+  const toggleStep = (index: number) => {
+    const newSteps = completedSteps.includes(index)
+      ? completedSteps.filter(i => i !== index)
+      : [...completedSteps, index];
+    
+    setCompletedSteps(newSteps);
+    localStorage.setItem(`progress-${meal.title}`, JSON.stringify(newSteps));
+
+    if (newSteps.length === meal.recipe.steps.length && meal.recipe.steps.length > 0) {
+      setShowConfetti(true);
+      playTTS?.("Excellent work! ChefCo is proud. Your dish is officially complete and ready to serve.");
+      setTimeout(() => setShowConfetti(false), 5000);
+    }
+  };
+
+  const progress = meal.recipe.steps.length > 0 
+    ? Math.round((completedSteps.length / meal.recipe.steps.length) * 100) 
+    : 0;
+
   return (
-    <div className="bg-white dark:bg-forest/10 rounded-[2.5rem] p-8 shadow-sm border border-sand dark:border-forest/20 transition-all hover:shadow-2xl group relative overflow-hidden">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          {type && <h4 className="text-[10px] font-black uppercase tracking-widest text-leaf-dark mb-1">{type}</h4>}
-          <h5 className="text-xl font-bold text-forest-dark dark:text-cream group-hover:text-forest transition-colors">{meal.title}</h5>
-        </div>
-        <button 
-          onClick={() => playTTS?.(`Chef here. Today's ${type} is ${meal.title}. ${meal.description}`)} 
-          className="text-forest hover:text-lime transition-all p-2 bg-sand/20 dark:bg-white/5 rounded-full"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m5.586-1.586a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-        </button>
-      </div>
-      <p className="text-sm opacity-70 mb-6 leading-relaxed">{meal.description}</p>
+    <div className={`transition-all duration-500 rounded-[3rem] p-1 bg-gradient-to-br from-sand to-white dark:from-forest/20 dark:to-forest/5 shadow-lg group relative ${expanded ? 'col-span-full' : ''}`}>
+      {showConfetti && <Confetti />}
       
-      <div className="flex flex-wrap gap-2 mb-8">
-        {meal.ingredientsUsed.map((ing, i) => <IngredientTag key={i} ingredient={ing} />)}
-      </div>
+      <div className="bg-white dark:bg-[#1C1C1E] rounded-[2.9rem] p-8 h-full flex flex-col border border-sand dark:border-forest/20">
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex-1">
+            {type && <span className="text-[10px] font-black uppercase tracking-[0.3em] text-leaf-dark mb-2 block opacity-70">{type}</span>}
+            <h5 className="text-3xl font-bold text-forest-dark dark:text-cream leading-tight tracking-tight group-hover:text-forest transition-colors">{meal.title}</h5>
+          </div>
+          <button 
+            onClick={() => playTTS?.(`ChefCo guidance for ${meal.title}. It's ${meal.description}. Readiness level: ${meal.recipe.difficulty}.`, audioId)} 
+            className="p-4 bg-sand/30 dark:bg-white/5 rounded-full hover:scale-110 active:scale-95 transition-all text-forest dark:text-lime"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.536 8.464a5 5 0 010 7.072m5.586-1.586a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+          </button>
+        </div>
 
-      <button onClick={() => setExpanded(!expanded)} className="w-full py-3 bg-sand/30 dark:bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-leaf/20 transition-all border border-transparent hover:border-leaf/30">
-        {expanded ? 'Hide Steps' : 'View Recipe'}
-      </button>
+        <p className="text-sm opacity-50 mb-8 leading-relaxed font-medium">{meal.description}</p>
 
-      {expanded && (
-        <div className="mt-8 pt-8 border-t border-sand dark:border-forest/20 animate-grow space-y-8">
-          {meal.recipe.masalas && meal.recipe.masalas.length > 0 && (
-            <div className="bg-earth/10 dark:bg-forest/20 p-5 rounded-[1.5rem] border border-earth/20">
-              <h6 className="text-[11px] font-black uppercase text-leaf-dark dark:text-lime mb-3 tracking-widest">Seasoning Base</h6>
-              <div className="flex flex-wrap gap-2">
-                {meal.recipe.masalas.map((m, i) => (
-                  <span key={i} className="text-[10px] font-bold bg-white dark:bg-forest-dark text-forest-dark dark:text-cream px-3 py-1 rounded-lg shadow-sm">
-                    {m}
+        <div className="flex flex-wrap gap-2 mb-10">
+          {meal.ingredientsUsed.map((ing, i) => (
+            <span key={i} className={`text-[10px] px-4 py-1.5 rounded-full font-bold uppercase tracking-widest border ${ing.source === 'priority' ? 'bg-spoil/10 border-spoil/20 text-spoil' : 'bg-leaf/10 border-leaf/20 text-forest'}`}>
+              {ing.name}
+            </span>
+          ))}
+        </div>
+
+        <button 
+          onClick={() => setExpanded(!expanded)} 
+          className={`w-full py-5 rounded-[2rem] text-xs font-black uppercase tracking-[0.4em] transition-all duration-300 flex items-center justify-center space-x-3
+            ${expanded ? 'bg-forest-dark text-cream' : 'bg-sand/40 hover:bg-leaf/20 dark:bg-white/5 dark:hover:bg-forest/20'}`}
+        >
+          <span>{expanded ? 'Close Recipe' : 'Start Cooking'}</span>
+          <svg className={`w-4 h-4 transition-transform duration-500 ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+        </button>
+
+        {expanded && (
+          <div className="mt-12 space-y-12 animate-grow">
+            {/* Progress Hub */}
+            <div className="sticky top-0 z-20 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl py-6 border-b border-sand dark:border-forest/20">
+              <div className="flex justify-between items-end mb-4">
+                <div>
+                  <h6 className="text-[10px] font-black uppercase tracking-[0.3em] text-forest/40 dark:text-cream/40 mb-1">Completion</h6>
+                  <span className="text-3xl font-black text-forest-dark dark:text-cream tracking-tighter">{progress}%</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-leaf block mb-1">Status</span>
+                  <span className={`text-xs font-bold uppercase tracking-widest ${progress === 100 ? 'text-lime' : 'text-forest'}`}>
+                    {progress === 100 ? 'Dish Mastered' : 'Cooking in Progress'}
                   </span>
-                ))}
+                </div>
+              </div>
+              <div className="h-4 bg-sand/30 dark:bg-forest/20 rounded-full overflow-hidden p-1 border border-sand dark:border-forest/10">
+                <div 
+                  className={`h-full rounded-full bg-gradient-to-r from-forest via-leaf to-lime transition-all duration-1000 ease-out ${progress > 0 ? 'animate-pulse-soft' : ''}`}
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             </div>
-          )}
-          
-          <div>
-            <h6 className="text-[11px] font-black uppercase text-leaf-dark dark:text-lime mb-4 tracking-widest">Instructions</h6>
-            <ol className="space-y-4">
-              {meal.recipe.steps.map((s, i) => (
-                <li key={i} className="text-sm opacity-80 flex space-x-4 items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-forest text-white dark:bg-lime dark:text-forest-dark rounded-full flex items-center justify-center text-[10px] font-black">{i+1}</span>
-                  <span className="leading-relaxed pt-0.5">{s}</span>
-                </li>
-              ))}
-            </ol>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div className="space-y-10">
+                <div>
+                  <h6 className="text-[10px] font-black uppercase tracking-[0.4em] text-leaf-dark mb-6 opacity-60">ChefCo's Guide</h6>
+                  <div className="space-y-5">
+                    {meal.recipe.steps.map((step, i) => (
+                      <div 
+                        key={i}
+                        onClick={() => toggleStep(i)}
+                        className={`group flex items-start p-6 rounded-[2.5rem] cursor-pointer transition-all border-2 
+                          ${completedSteps.includes(i) 
+                            ? 'bg-lime/5 border-lime/20 opacity-40 translate-x-2' 
+                            : 'bg-white dark:bg-forest/5 border-transparent hover:border-sand dark:hover:border-forest/30 shadow-sm hover:shadow-md'}`}
+                        aria-checked={completedSteps.includes(i)}
+                        role="checkbox"
+                        tabIndex={0}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleStep(i)}
+                      >
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 mr-5
+                          ${completedSteps.includes(i) ? 'bg-lime text-forest-dark rotate-[360deg]' : 'bg-sand dark:bg-white/10 text-forest-dark dark:text-cream font-black text-sm'}`}>
+                          {completedSteps.includes(i) ? (
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          ) : (i + 1)}
+                        </div>
+                        <p className={`text-lg font-medium leading-relaxed transition-all duration-500 ${completedSteps.includes(i) ? 'line-through decoration-lime decoration-2 italic' : ''}`}>
+                          {step}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-10">
+                <div className="bg-sand/20 dark:bg-forest/10 p-10 rounded-[3rem] border border-sand dark:border-forest/20">
+                   <h6 className="text-[10px] font-black uppercase tracking-[0.4em] text-leaf-dark mb-8 opacity-60">Pantry Check</h6>
+                   <div className="flex flex-wrap gap-3">
+                     {meal.recipe.masalas?.map((m, i) => (
+                       <div key={i} className="px-6 py-3 bg-white dark:bg-forest-dark rounded-2xl shadow-sm border border-sand/40 flex items-center space-x-3">
+                         <div className="w-2 h-2 rounded-full bg-lime"></div>
+                         <span className="text-sm font-bold opacity-80">{m}</span>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+
+                <div className="p-10 bg-forest-dark dark:bg-forest rounded-[3rem] text-cream relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform duration-700">
+                    <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+                  </div>
+                  <h6 className="text-[10px] font-black uppercase tracking-[0.4em] mb-4 opacity-50">ChefCo Recovery Tip</h6>
+                  <p className="text-xl font-medium leading-relaxed italic">
+                    "If the texture feels too dry, add a splash of warm stock or pasta water to emulsify the flavors. Don't rush the sizzle!"
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {progress === 100 && (
+              <div className="bg-lime p-10 rounded-[3.5rem] text-center shadow-[0_30px_60px_rgba(181,230,29,0.3)] animate-grow">
+                <h6 className="text-4xl font-black text-forest-dark tracking-tighter mb-2">MASTERPIECE READY!</h6>
+                <p className="text-forest-dark font-bold opacity-70 text-lg uppercase tracking-widest">You saved food and cooked like a pro.</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
@@ -104,39 +196,40 @@ const Dashboard: React.FC = () => {
   const [priorityList, setPriorityList] = useState<Ingredient[]>([]);
   const [pantryList, setPantryList] = useState<string[]>([]);
   const [result, setResult] = useState<PlannerResponse | null>(null);
-  const [savedPlans, setSavedPlans] = useState<PlannerResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLensLoading, setIsLensLoading] = useState(false);
-  const [saveMsg, setSaveMsg] = useState('');
-  const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
-  const [viewSaved, setViewSaved] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('savedPlans') || '[]');
-    setSavedPlans(saved);
-    
+    const handleChefAction = (e: any) => {
+      const { name, listType } = e.detail;
+      if (listType === 'priority') {
+        setPriorityList(prev => [...prev, { id: Math.random().toString(), name, isPriority: true }]);
+      } else {
+        setPantryList(prev => [...prev, name]);
+      }
+    };
+    window.addEventListener('chef-action', handleChefAction);
+    return () => window.removeEventListener('chef-action', handleChefAction);
+  }, []);
+
+  useEffect(() => {
     if (result) {
       window.dispatchEvent(new CustomEvent('chef-context', { detail: { result } }));
     }
-
-    const openHandler = () => setIsHowItWorksOpen(true);
-    window.addEventListener('open-how-it-works', openHandler);
-    return () => window.removeEventListener('open-how-it-works', openHandler);
   }, [result]);
 
   const handleGenerate = async () => {
-    if (priorityList.length === 0) return alert("Please identify items to rescue first.");
+    if (priorityList.length === 0) return alert("Please list items you want to save first!");
     setLoading(true);
     try {
       const data = await generateWasteFreePlan(priorityList.map(i => i.name), pantryList);
       setResult(data);
-      window.scrollTo({ top: 400, behavior: 'smooth' });
-    } catch (e) { alert("Failed to compute plan."); }
+    } catch (e) { alert("Something went wrong. Let's try once more."); }
     setLoading(false);
   };
 
@@ -148,45 +241,18 @@ const Dashboard: React.FC = () => {
     setLoading(false);
   };
 
-  const handleSavePlan = () => {
-    if (result) {
-      const updated = [result, ...savedPlans].slice(0, 5);
-      setSavedPlans(updated);
-      localStorage.setItem('savedPlans', JSON.stringify(updated));
-      setSaveMsg('Archived in Vault.');
-      setTimeout(() => setSaveMsg(''), 3000);
-    }
-  };
-
-  const handleLensClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setIsLensLoading(true);
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = (reader.result as string).split(',')[1];
       try {
-        const foundIngredients = await analyzeImage(base64);
-        if (foundIngredients.length > 0) {
-          const newItems = foundIngredients.map(name => ({
-            id: (Date.now() + Math.random()).toString(),
-            name,
-            isPriority: true
-          }));
-          setPriorityList(prev => [...prev, ...newItems]);
-          setSaveMsg(`Detected ${foundIngredients.length} ingredients.`);
-          setTimeout(() => setSaveMsg(''), 3000);
-        }
-      } catch (err) {
-        setSaveMsg('Detection error.');
-      } finally {
-        setIsLensLoading(false);
-      }
+        const items = await analyzeImage(base64);
+        const newItems = items.map(name => ({ id: Math.random().toString(), name, isPriority: true }));
+        setPriorityList(prev => [...prev, ...newItems]);
+      } catch (err) {} finally { setIsLensLoading(false); }
     };
     reader.readAsDataURL(file);
   };
@@ -204,166 +270,104 @@ const Dashboard: React.FC = () => {
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
       source.start();
-    } catch (e) { console.error("Audio error", e); }
+    } catch (e) {}
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-16 pb-32 relative">
-      {/* Search Section */}
+    <div className="max-w-7xl mx-auto space-y-24 pb-48 pt-10">
       <section className="text-center space-y-12 animate-leaf-fade">
-        <div className="space-y-4">
-          <h2 className="text-6xl sm:text-8xl font-black text-forest-dark dark:text-cream leading-[0.9] tracking-tighter">
-            ZERO<span className="text-leaf italic font-light">WASTE</span> <br />
-            PLANNER.
-          </h2>
-          <p className="text-lg opacity-60 max-w-lg mx-auto font-medium">An autonomous agent that plans your kitchen's survival.</p>
-        </div>
+        <h2 className="text-7xl md:text-[10rem] font-black text-forest-dark dark:text-cream leading-none tracking-tighter">
+          RESKUE.<br />
+          <span className="text-leaf italic underline decoration-lime/30 decoration-8 underline-offset-[1rem]">REVIVE.</span>
+        </h2>
+        <p className="text-2xl opacity-40 max-w-2xl mx-auto font-bold tracking-tight">Meet ChefCo, your zero-waste AI mentor. Transform expiring groceries into Michelin-level meals.</p>
         
-        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-grow group">
-            <input 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="Find a recipe..."
-              className="w-full bg-white dark:bg-forest/20 border-2 border-sand dark:border-forest/40 px-8 py-6 rounded-[2.5rem] focus:outline-none focus:border-leaf shadow-sm text-base transition-all group-hover:shadow-md"
-            />
-          </div>
-          <button 
-            onClick={handleSearch} 
-            disabled={loading}
-            className="bg-forest-dark dark:bg-lime dark:text-forest-dark text-cream px-12 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl hover:scale-105 transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
-          >
-            {loading ? <div className="w-4 h-4 border-2 border-cream border-t-transparent rounded-full animate-spin"></div> : (
-              <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                <span>Search</span>
-              </>
-            )}
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
+          <input 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="What's in your fridge? (e.g. Wilted spinach and paneer)"
+            className="flex-grow bg-white dark:bg-forest/10 border-2 border-sand dark:border-forest/40 px-12 py-8 rounded-[3rem] focus:outline-none focus:border-leaf shadow-inner transition-all text-xl font-medium"
+          />
+          <button onClick={handleSearch} disabled={loading} className="bg-forest-dark dark:bg-lime dark:text-forest-dark text-cream px-16 py-8 rounded-[3rem] font-black uppercase tracking-widest text-sm shadow-2xl active:scale-95 transition-all">
+            {loading ? 'Consulting ChefCo...' : 'Teach Me'}
           </button>
         </div>
       </section>
 
-      {/* Impact Stats (Agent Proactive Output) */}
-      {result && <ImpactCard impact={result.impact} />}
-
-      {/* Main Input Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <div className={`bg-white/70 dark:bg-forest/10 glass p-10 rounded-[3.5rem] border-b-[16px] border-spoil/20 transition-all hover:shadow-2xl relative`}>
-           <div className="flex justify-between items-start mb-10">
-             <div>
-               <h3 className="text-3xl font-black flex items-center"><span className="w-5 h-5 bg-spoil rounded-full mr-4 shadow-lg animate-pulse" /> Use First</h3>
-               <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mt-1">Expiring Ingredients</p>
-             </div>
-             <div className="flex space-x-3">
-                <button 
-                  onClick={handleLensClick}
-                  disabled={isLensLoading}
-                  className={`flex items-center space-x-2 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isLensLoading ? 'bg-earth text-forest animate-pulse' : 'bg-lime text-forest-dark hover:scale-105 shadow-xl shadow-lime/20'}`}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  <span>{isLensLoading ? 'Scanning...' : 'Scan Fridge'}</span>
-                </button>
-                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-             </div>
-           </div>
-           
-           <div className="relative mb-8">
-            <input 
-              onKeyDown={e => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  setPriorityList([...priorityList, { id: Date.now().toString(), name: e.currentTarget.value.trim(), isPriority: true }]);
-                  e.currentTarget.value = '';
-                }
-              }} 
-              placeholder="Type item and press enter..." 
-              className="w-full bg-cream/50 dark:bg-forest/30 border-2 border-sand dark:border-forest/50 p-6 rounded-3xl shadow-inner focus:outline-none focus:border-spoil/50 transition-all text-sm font-medium" 
-            />
-           </div>
-
-           <div className="flex flex-wrap gap-3 min-h-[5rem]">
-             {priorityList.map(item => (
-               <span key={item.id} className="bg-spoil/5 text-spoil px-5 py-3 rounded-2xl text-xs font-black border border-spoil/20 flex items-center animate-grow group">
-                {item.name}
-                <button onClick={() => setPriorityList(priorityList.filter(p => p.id !== item.id))} className="ml-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-               </span>
-             ))}
-           </div>
-        </div>
-
-        <div className={`bg-white/70 dark:bg-forest/10 glass p-10 rounded-[3.5rem] border-b-[16px] border-leaf/20 transition-all hover:shadow-2xl`}>
-           <div className="mb-10">
-             <h3 className="text-3xl font-black flex items-center"><span className="w-5 h-5 bg-leaf rounded-full mr-4 shadow-lg" /> Pantry Items</h3>
-             <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mt-1">Grains, spices, stable goods</p>
-           </div>
-           <div className="relative mb-8">
-            <input 
-              onKeyDown={e => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  setPantryList([...pantryList, e.currentTarget.value.trim()]);
-                  e.currentTarget.value = '';
-                }
-              }} 
-              placeholder="Add staple..." 
-              className="w-full bg-cream/50 dark:bg-forest/30 border-2 border-sand dark:border-forest/50 p-6 rounded-3xl shadow-inner focus:outline-none focus:border-leaf/50 transition-all text-sm font-medium" 
-            />
-           </div>
-
-           <div className="flex flex-wrap gap-3 min-h-[5rem]">
-             {pantryList.map((item, i) => (
-               <span key={i} className="bg-leaf/10 text-forest-dark dark:text-cream px-5 py-3 rounded-2xl text-xs font-black border border-leaf/30 flex items-center shadow-sm animate-grow group">
-                {item}
-                <button onClick={() => setPantryList(pantryList.filter((_, idx) => idx !== i))} className="ml-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-               </span>
-             ))}
-           </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex flex-col items-center space-y-8 py-10">
-        <button 
-          onClick={handleGenerate} 
-          disabled={loading || priorityList.length === 0} 
-          className="bg-forest-dark dark:bg-lime dark:text-forest-dark text-cream px-16 py-8 rounded-[3rem] text-2xl font-black uppercase tracking-[0.2em] shadow-2xl hover:scale-105 transition-all disabled:opacity-40"
-        >
-          {loading ? 'Agent Reasoning...' : 'Sync Kitchen Agent'}
-        </button>
-        {saveMsg && <p className="text-base font-black text-leaf-dark animate-bounce uppercase tracking-[0.3em]">{saveMsg}</p>}
-      </div>
-
-      {/* Plan Display */}
-      {result && (
-        <div className="space-y-16 animate-grow py-20 border-t-4 border-sand dark:border-forest/20">
-          <div className="text-center space-y-4">
-            <h3 className="text-6xl font-black text-forest-dark dark:text-cream tracking-tighter uppercase">Waste-Free Roadmap</h3>
-            <p className="opacity-40 text-xs font-black uppercase tracking-[0.6em]">2-Day Optimized Cycle</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+        <div className="bg-white/50 dark:bg-forest/5 glass p-16 rounded-[4.5rem] border-b-[16px] border-spoil/10 transition-all hover:border-spoil/30">
+          <div className="flex justify-between items-center mb-10">
+            <h3 className="text-4xl font-black tracking-tighter">Save List</h3>
+            <button onClick={() => fileInputRef.current?.click()} className="text-[11px] font-black uppercase text-white bg-forest-dark dark:bg-lime dark:text-forest-dark px-8 py-4 rounded-2xl hover:scale-105 transition-all shadow-xl">
+              {isLensLoading ? 'ChefCo Scanning...' : 'Vision Lens'}
+            </button>
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
           </div>
-          <div className="space-y-24">
-            {result.plan.map((day, i) => (
-              <div key={i} className="bg-leaf/5 dark:bg-forest/5 p-16 rounded-[5rem] border border-leaf/20 relative group overflow-hidden">
-                <div className="mb-16 flex items-center space-x-6">
-                  <span className="bg-forest-dark text-white dark:bg-lime dark:text-forest-dark px-10 py-4 rounded-[1.5rem] font-black uppercase tracking-[0.4em] text-sm shadow-2xl">Day {day.day}</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                  <MealCard meal={day.breakfast} type="Breakfast" playTTS={playTTS} />
-                  <MealCard meal={day.lunch} type="Lunch" playTTS={playTTS} />
-                  <MealCard meal={day.dinner} type="Dinner" playTTS={playTTS} />
-                </div>
-              </div>
+          <input 
+            onKeyDown={e => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { setPriorityList([...priorityList, { id: Date.now().toString(), name: e.currentTarget.value.trim(), isPriority: true }]); e.currentTarget.value = ''; } }} 
+            placeholder="Add items needing rescue..." 
+            className="w-full bg-cream/30 dark:bg-forest/20 border-2 border-sand/40 p-6 rounded-[2rem] mb-10 text-lg font-medium focus:outline-none focus:border-leaf" 
+          />
+          <div className="flex flex-wrap gap-4">
+            {priorityList.map(item => (
+              <span key={item.id} className="bg-spoil/10 text-spoil px-6 py-3 rounded-2xl text-xs font-black border border-spoil/20 flex items-center shadow-sm">
+                {item.name}
+                <button onClick={() => setPriorityList(priorityList.filter(p => p.id !== item.id))} className="ml-4 hover:text-forest transition-colors text-xl">×</button>
+              </span>
             ))}
           </div>
         </div>
-      )}
 
-      {/* Footer Branded Copy */}
-      <div className="text-center py-20 opacity-30">
-        <p className="text-[10px] font-black uppercase tracking-[0.6em]">ZeroPoint Agentic Architecture v2.4</p>
+        <div className="bg-white/50 dark:bg-forest/5 glass p-16 rounded-[4.5rem] border-b-[16px] border-leaf/10 transition-all hover:border-leaf/30">
+          <h3 className="text-4xl font-black tracking-tighter mb-10">Pantry</h3>
+          <input 
+            onKeyDown={e => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { setPantryList([...pantryList, e.currentTarget.value.trim()]); e.currentTarget.value = ''; } }} 
+            placeholder="Staples you have... (Rice, Spices)" 
+            className="w-full bg-cream/30 dark:bg-forest/20 border-2 border-sand/40 p-6 rounded-[2rem] mb-10 text-lg font-medium focus:outline-none focus:border-leaf" 
+          />
+          <div className="flex flex-wrap gap-4">
+            {pantryList.map((item, i) => (
+              <span key={i} className="bg-leaf/10 text-forest-dark dark:text-cream px-6 py-3 rounded-2xl text-xs font-black border border-leaf/20 flex items-center shadow-sm">
+                {item}
+                <button onClick={() => setPantryList(pantryList.filter((_, idx) => idx !== i))} className="ml-4 hover:text-spoil transition-colors text-xl">×</button>
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
+
+      <div className="flex flex-col items-center py-10">
+        <button 
+          onClick={handleGenerate} 
+          disabled={loading || priorityList.length === 0} 
+          className="bg-forest-dark dark:bg-lime dark:text-forest-dark text-cream px-24 py-12 rounded-[4rem] text-3xl font-black uppercase tracking-[0.3em] shadow-[0_40px_80px_rgba(0,0,0,0.3)] hover:shadow-leaf/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-40"
+        >
+          {loading ? 'ChefCo Planning...' : 'Reskue Mission'}
+        </button>
+      </div>
+
+      {(result || searchResults.length > 0) && (
+        <div className="space-y-24 animate-grow px-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-6xl font-black tracking-tighter">{searchResults.length > 0 ? 'ChefCo Curations' : 'The Reskue Plan'}</h3>
+            <div className="h-1 flex-grow mx-12 bg-sand/30 rounded-full"></div>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            {searchResults.length > 0 ? (
+              searchResults.map((meal, i) => <MealCard key={i} meal={meal} playTTS={playTTS} />)
+            ) : (
+              result?.plan.flatMap((day) => [
+                <MealCard key={`${day.day}-b`} meal={day.breakfast} type={`Day ${day.day} • Breakfast`} playTTS={playTTS} />,
+                <MealCard key={`${day.day}-l`} meal={day.lunch} type={`Day ${day.day} • Lunch`} playTTS={playTTS} />,
+                <MealCard key={`${day.day}-d`} meal={day.dinner} type={`Day ${day.day} • Dinner`} playTTS={playTTS} />
+              ])
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

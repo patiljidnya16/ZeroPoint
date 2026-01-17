@@ -8,14 +8,14 @@ export interface Ingredient {
 export interface UsedIngredient {
   name: string;
   source: 'priority' | 'pantry';
-  substitutedFrom?: string; // New: tracking agentic swaps
 }
 
 export interface Recipe {
   steps: string[];
   prepTime: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
-  masalas: string[];
+  // List of spices or masalas used in the recipe.
+  masalas?: string[];
 }
 
 export interface Meal {
@@ -38,14 +38,7 @@ export interface ScrapTip {
   type: 'recipe' | 'compost' | 'household';
 }
 
-export interface ImpactStats {
-  carbonSaved: number; // in kg
-  waterSaved: number; // in liters
-  moneySaved: number; // in dollars
-}
-
 export interface PlannerResponse {
   plan: DailyPlan[];
   tips: ScrapTip[];
-  impact: ImpactStats; // New: agentic impact calculation
 }

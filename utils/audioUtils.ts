@@ -18,14 +18,14 @@ export function encode(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-// Update decodeAudioData to exactly match the provided guideline for PCM decoding
 export async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
+  // Ensure the underlying buffer is correctly aligned for Int16Array (2 bytes)
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 

@@ -24,11 +24,6 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const openHowItWorks = (e: React.MouseEvent) => {
-    e.preventDefault();
-    window.dispatchEvent(new CustomEvent('open-how-it-works'));
-  };
-
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-500 dark:bg-forest-dark">
       {/* Header */}
@@ -42,7 +37,7 @@ const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-black text-forest-dark dark:text-cream tracking-tighter transition-colors">ZERO<span className="text-forest dark:text-lime italic">POINT</span></h1>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-forest/40 dark:text-lime/40 -mt-1 transition-colors">Smart Food Planning</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-forest/40 dark:text-lime/40 -mt-1 transition-colors">Waste-Free Planner</p>
             </div>
           </div>
           
@@ -63,13 +58,10 @@ const App: React.FC = () => {
               )}
             </button>
             <div className="hidden md:flex items-center space-x-8">
-              <a 
-                href="#" 
-                onClick={openHowItWorks}
-                className="text-sm font-bold text-forest-dark/60 dark:text-cream/60 hover:text-forest dark:hover:text-lime transition-colors uppercase tracking-widest"
-              >
-                Help
-              </a>
+              <a href="#" className="text-sm font-bold text-forest-dark/60 dark:text-cream/60 hover:text-forest dark:hover:text-lime transition-colors">How it works</a>
+              <button className="bg-forest-dark dark:bg-lime dark:text-forest-dark text-cream px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:shadow-forest/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                Join the Movement
+              </button>
             </div>
           </nav>
         </div>
@@ -89,18 +81,20 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
             <h4 className="text-xl font-black text-white tracking-tighter mb-2 uppercase">ZeroPoint</h4>
-            <p className="text-sm opacity-60">Saving money and the planet, one meal at a time.</p>
+            <p className="text-sm opacity-60">Empowering every kitchen to save the planet, one meal at a time.</p>
           </div>
           <div className="flex space-x-8 text-sm font-bold">
+            <span className="hover:text-lime cursor-pointer transition-colors uppercase tracking-widest">About</span>
             <span className="hover:text-lime cursor-pointer transition-colors uppercase tracking-widest text-lime">Eco-Tips</span>
+            <span className="hover:text-lime cursor-pointer transition-colors uppercase tracking-widest">Contact</span>
           </div>
         </div>
         <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-white/5 text-center">
           <div className="text-[10px] uppercase font-black tracking-[0.2em] text-lime opacity-80 mb-2">
-            Website by BeyondYotta_Helix
+            Website build by BeyondYotta_Helix
           </div>
           <div className="text-[10px] uppercase font-black tracking-widest opacity-40">
-            © 2024 ZeroPoint.
+            © 2024 Zero-Point Planner. Built for a better future.
           </div>
         </div>
       </footer>
@@ -108,5 +102,4 @@ const App: React.FC = () => {
   );
 };
 
-// Add default export
 export default App;

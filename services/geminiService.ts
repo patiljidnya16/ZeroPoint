@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { PlannerResponse, Meal } from "../types";
 
+// Initialize the Gemini API client using the environment API key.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MEAL_PROPERTIES = {
@@ -13,8 +14,7 @@ const MEAL_PROPERTIES = {
       type: Type.OBJECT,
       properties: {
         name: { type: Type.STRING },
-        source: { type: Type.STRING },
-        substitutedFrom: { type: Type.STRING, description: "If the agent swapped this for a missing pantry item, name the original missing item." }
+        source: { type: Type.STRING, description: 'Source must be "priority" or "pantry"' }
       },
       required: ["name", "source"]
     } 
@@ -24,10 +24,14 @@ const MEAL_PROPERTIES = {
     properties: {
       steps: { type: Type.ARRAY, items: { type: Type.STRING } },
       prepTime: { type: Type.STRING },
-      difficulty: { type: Type.STRING },
-      masalas: { type: Type.ARRAY, items: { type: Type.STRING } }
+      difficulty: { type: Type.STRING, description: 'Must be "Easy", "Medium", or "Hard"' },
+      masalas: { 
+        type: Type.ARRAY, 
+        items: { type: Type.STRING },
+        description: 'Optional list of spices or seasonings used.'
+      }
     },
-    required: ["steps", "prepTime", "difficulty", "masalas"]
+    required: ["steps", "prepTime", "difficulty"]
   }
 };
 
@@ -54,60 +58,52 @@ const PLANNER_SCHEMA = {
         properties: {
           scrap: { type: Type.STRING },
           suggestion: { type: Type.STRING },
-          type: { type: Type.STRING }
+          type: { type: Type.STRING, description: 'Type must be "recipe", "compost", or "household"' }
         },
         required: ["scrap", "suggestion", "type"]
       }
-    },
-    impact: {
-      type: Type.OBJECT,
-      properties: {
-        carbonSaved: { type: Type.NUMBER },
-        waterSaved: { type: Type.NUMBER },
-        moneySaved: { type: Type.NUMBER }
-      },
-      required: ["carbonSaved", "waterSaved", "moneySaved"]
     }
   },
-  required: ["plan", "tips", "impact"]
+  required: ["plan", "tips"]
 };
 
+// Generates a waste-free meal plan using the Gemini API.
 export const generateWasteFreePlan = async (
   priorityIngredients: string[],
   pantryItems: string[]
 ): Promise<PlannerResponse> => {
   const prompt = `
-    ROLE: You are the ZeroPoint Agent. Your goal is to eliminate food waste through intelligent planning and autonomous substitutions.
+    As a sustainable zero-waste chef, create a 2-day meal plan with FULL RECIPES.
+    PRIORITY INGREDIENTS: ${priorityIngredients.join(", ")}
+    EXISTING PANTRY: ${pantryItems.join(", ")}
     
-    TASK: Create a 2-day meal plan using:
-    - PRIORITY (MUST USE): ${priorityIngredients.join(", ")}
-    - PANTRY (AVAILABLE): ${pantryItems.join(", ")}
-    
-    AGENTIC GUIDELINES:
-    1. If a key ingredient for a classic recipe is missing, use your reasoning to substitute it with an available PANTRY item. Note the 'substitutedFrom' in the data.
-    2. Create "Chain Recipes": Day 1 components should ideally be reused in Day 2 (e.g., Day 1 steamed rice becomes Day 2 fried rice).
-    3. Calculate the environmental impact based on the weight/type of priority ingredients saved.
+    Rules:
+    1. Prioritize using the priority ingredients in the first day.
+    2. Suggest creative uses for common scraps.
+    3. Ensure no waste is left over.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      // Using gemini-3-flash-preview for text generation tasks as recommended.
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: PLANNER_SCHEMA,
-        thinkingConfig: { thinkingBudget: 4000 }
       },
     });
+
     return JSON.parse(response.text || "{}") as PlannerResponse;
   } catch (error) {
-    console.error("Agent Engine Error:", error);
+    console.error("Gemini API Error:", error);
     throw error;
   }
 };
 
+// Searches for recipes based on a user query using Gemini.
 export const searchRecipes = async (query: string): Promise<Meal[]> => {
-  const prompt = `Act as a professional chef. Find 3 recipes for: "${query}". Ensure they are waste-friendly.`;
+  const prompt = `As a world-class zero-waste chef, provide 3 detailed recipe suggestions for: ${query}. Focus on sustainability and common pantry staples.`;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -124,43 +120,65 @@ export const searchRecipes = async (query: string): Promise<Meal[]> => {
         }
       }
     });
-    return JSON.parse(response.text || "[]");
+    return JSON.parse(response.text || "[]") as Meal[];
   } catch (error) {
+    console.error("Search Recipes Error:", error);
     return [];
   }
 };
 
+// Analyzes an image to identify ingredients using Gemini 3 Pro for complex vision tasks.
 export const analyzeImage = async (base64Data: string): Promise<string[]> => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: {
         parts: [
-          { text: "Identify every food item in this fridge/pantry. Be specific (e.g., 'Half-cut Onion' instead of just 'Onion'). Return comma separated list." },
+          { text: "Identify all food ingredients in this image. Return a simple comma-separated list of ingredient names only." },
           { inlineData: { mimeType: "image/jpeg", data: base64Data } }
         ]
       }
     });
-    return (response.text || "").split(',').map(s => s.trim()).filter(s => s.length > 0);
+    const text = response.text || "";
+    return text.split(',').map(s => s.trim()).filter(s => s.length > 0);
   } catch (error) {
+    console.error("Image analysis error:", error);
     return [];
   }
 };
 
+// Provides quick advice for zero-waste scrap usage.
+export const getScrapAdvice = async (scrap: string): Promise<string> => {
+  const prompt = `Quick zero-waste tip for ${scrap}. 1 sentence max.`;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+    return response.text || "No suggestion found.";
+  } catch (error) {
+    return "Error getting advice.";
+  }
+};
+
+// Generates text-to-speech audio for culinary instructions.
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: text }] }],
+      contents: [{ parts: [{ text: `Say this clearly: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
         },
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (error) {
+    console.error("TTS Error:", error);
     return undefined;
   }
 };
