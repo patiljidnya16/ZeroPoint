@@ -1,9 +1,13 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { PlannerResponse, Meal } from "../types";
 
-// Initialize the Gemini API client using the environment API key.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Standardizing API key retrieval for Vercel/Vite/Browser environments
+const getApiKey = () => {
+  return process.env.API_KEY || (window as any).API_KEY || "";
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 const MEAL_PROPERTIES = {
   title: { type: Type.STRING },
@@ -72,7 +76,6 @@ const PLANNER_SCHEMA = {
   required: ["plan", "tips"]
 };
 
-// Generates a waste-free meal plan using the Gemini API.
 export const generateWasteFreePlan = async (
   priorityIngredients: string[],
   pantryItems: string[]
@@ -106,7 +109,6 @@ export const generateWasteFreePlan = async (
   }
 };
 
-// Searches for recipes based on a user query using Gemini.
 export const searchRecipes = async (query: string): Promise<Meal[]> => {
   const prompt = `As a world-class zero-waste chef, provide 3 detailed recipe suggestions for: ${query}. Focus on sustainability. For each recipe, include wasteFreeHacks for scraps and leftovers.`;
   try {
@@ -132,7 +134,6 @@ export const searchRecipes = async (query: string): Promise<Meal[]> => {
   }
 };
 
-// Analyzes an image to identify ingredients using Gemini 3 Pro.
 export const analyzeImage = async (base64Data: string): Promise<string[]> => {
   try {
     const response = await ai.models.generateContent({

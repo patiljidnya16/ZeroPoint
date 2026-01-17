@@ -70,7 +70,8 @@ const LiveChef: React.FC = () => {
 
   const startSession = async () => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY || (window as any).API_KEY || "";
+      const ai = new GoogleGenAI({ apiKey });
       
       inputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       outputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -254,7 +255,6 @@ CONTEXT MEMORY: Remember substitutions or previous mistakes mentioned in this tu
           <div className="relative bg-white dark:bg-[#121214] w-full max-w-5xl rounded-t-[5rem] shadow-[0_-30px_120px_rgba(0,0,0,0.7)] animate-grow border-t border-white/5 h-[85vh] flex flex-col overflow-hidden">
             <div className="p-16 flex-grow flex flex-col relative">
               
-              {/* ChefCo Header */}
               <div className="flex justify-between items-center mb-12">
                 <div className="flex items-center space-x-5">
                   <div className="flex -space-x-3">
@@ -273,7 +273,6 @@ CONTEXT MEMORY: Remember substitutions or previous mistakes mentioned in this tu
                 </button>
               </div>
 
-              {/* Mentorship View */}
               <div className="flex-grow overflow-y-auto px-6 space-y-16 custom-scrollbar mb-10">
                 {transcript.length === 0 && !currentInput && (
                   <div className="animate-grow mt-12 max-w-2xl">
@@ -292,10 +291,6 @@ CONTEXT MEMORY: Remember substitutions or previous mistakes mentioned in this tu
                         ].map((hint, i) => (
                           <button 
                             key={i} 
-                            onClick={() => {
-                              if (!isActive) toggleSession();
-                              // In a real scenario, we might inject this text as a tool send
-                            }}
                             className="bg-sand/30 dark:bg-forest/10 px-8 py-4 rounded-3xl text-sm font-bold border border-sand/50 dark:border-forest/20 hover:border-lime transition-all opacity-80 hover:opacity-100 shadow-sm"
                           >
                             {hint}
@@ -318,7 +313,6 @@ CONTEXT MEMORY: Remember substitutions or previous mistakes mentioned in this tu
                 <div ref={transcriptEndRef} />
               </div>
 
-              {/* Interaction Sphere */}
               <div className="mt-auto flex flex-col items-center">
                 <div className="w-full absolute bottom-0 left-0 h-3 gemini-gradient animate-gemini-glow opacity-90 blur-lg"></div>
                 <button onClick={toggleSession} className="transition-all hover:scale-105 active:scale-90 relative group">
