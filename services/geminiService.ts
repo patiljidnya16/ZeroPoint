@@ -32,6 +32,11 @@ const MEAL_PROPERTIES = {
       }
     },
     required: ["steps", "prepTime", "difficulty"]
+  },
+  wasteFreeHacks: {
+    type: Type.ARRAY,
+    items: { type: Type.STRING },
+    description: 'Specific tips for using scraps (like peels or stems) and ideas for transforming tomorrow\'s leftovers.'
   }
 };
 
@@ -44,9 +49,9 @@ const PLANNER_SCHEMA = {
         type: Type.OBJECT,
         properties: {
           day: { type: Type.NUMBER },
-          breakfast: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe"] },
-          lunch: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe"] },
-          dinner: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe"] }
+          breakfast: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe", "wasteFreeHacks"] },
+          lunch: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe", "wasteFreeHacks"] },
+          dinner: { type: Type.OBJECT, properties: MEAL_PROPERTIES, required: ["title", "description", "ingredientsUsed", "recipe", "wasteFreeHacks"] }
         },
         required: ["day", "breakfast", "lunch", "dinner"]
       }
@@ -79,13 +84,13 @@ export const generateWasteFreePlan = async (
     
     Rules:
     1. Prioritize using the priority ingredients in the first day.
-    2. Suggest creative uses for common scraps.
-    3. Ensure no waste is left over.
+    2. For EACH meal, include "wasteFreeHacks" which MUST provide ideas for scraps (e.g., "Don't toss potato peels—fry them with spices!") AND how to reuse the specific meal's leftovers.
+    3. Suggest creative uses for common scraps.
+    4. Ensure no waste is left over.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      // Using gemini-3-flash-preview for text generation tasks as recommended.
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
@@ -103,7 +108,7 @@ export const generateWasteFreePlan = async (
 
 // Searches for recipes based on a user query using Gemini.
 export const searchRecipes = async (query: string): Promise<Meal[]> => {
-  const prompt = `As a world-class zero-waste chef, provide 3 detailed recipe suggestions for: ${query}. Focus on sustainability and common pantry staples.`;
+  const prompt = `As a world-class zero-waste chef, provide 3 detailed recipe suggestions for: ${query}. Focus on sustainability. For each recipe, include wasteFreeHacks for scraps and leftovers.`;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -115,7 +120,7 @@ export const searchRecipes = async (query: string): Promise<Meal[]> => {
           items: {
             type: Type.OBJECT,
             properties: MEAL_PROPERTIES,
-            required: ["title", "description", "ingredientsUsed", "recipe"]
+            required: ["title", "description", "ingredientsUsed", "recipe", "wasteFreeHacks"]
           }
         }
       }
@@ -127,7 +132,7 @@ export const searchRecipes = async (query: string): Promise<Meal[]> => {
   }
 };
 
-// Analyzes an image to identify ingredients using Gemini 3 Pro for complex vision tasks.
+// Analyzes an image to identify ingredients using Gemini 3 Pro.
 export const analyzeImage = async (base64Data: string): Promise<string[]> => {
   try {
     const response = await ai.models.generateContent({
@@ -144,41 +149,5 @@ export const analyzeImage = async (base64Data: string): Promise<string[]> => {
   } catch (error) {
     console.error("Image analysis error:", error);
     return [];
-  }
-};
-
-// Provides quick advice for zero-waste scrap usage.
-export const getScrapAdvice = async (scrap: string): Promise<string> => {
-  const prompt = `Quick zero-waste tip for ${scrap}. 1 sentence max.`;
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-    });
-    return response.text || "No suggestion found.";
-  } catch (error) {
-    return "Error getting advice.";
-  }
-};
-
-// Generates text-to-speech audio for culinary instructions.
-export const generateSpeech = async (text: string): Promise<string | undefined> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say this clearly: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
-    });
-    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  } catch (error) {
-    console.error("TTS Error:", error);
-    return undefined;
   }
 };

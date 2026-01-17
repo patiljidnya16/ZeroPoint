@@ -23,6 +23,8 @@ export interface Meal {
   description: string;
   ingredientsUsed: UsedIngredient[];
   recipe: Recipe;
+  // Creative ways to use scraps or leftovers from this specific meal.
+  wasteFreeHacks: string[];
 }
 
 export interface DailyPlan {
