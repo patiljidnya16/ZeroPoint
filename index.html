@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zero-Point Food Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            leaf: '#A8D5BA',
+            'leaf-dark': '#7AB893',
+            forest: '#4A7C59',
+            'forest-dark': '#2F5039',
+            cream: '#F8F4E6',
+            sand: '#EDE4D4',
+            earth: '#D9CDBD',
+            sprout: '#C4E4B5',
+            lime: '#B5E61D',
+            moss: '#8ABF7A',
+            wilt: '#F4D03F',
+            spoil: '#E74C3C'
+          },
+          animation: {
+            'leaf-fade': 'leafFade 0.8s ease-out forwards',
+            'grow': 'grow 0.5s ease-out forwards',
+            'float': 'float 3s ease-in-out infinite',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite'
+          },
+          keyframes: {
+            leafFade: {
+              '0%': { opacity: '0', transform: 'translateY(15px) rotate(-2deg)' },
+              '100%': { opacity: '1', transform: 'translateY(0) rotate(0deg)' }
+            },
+            grow: {
+              '0%': { transform: 'scale(0.95)', opacity: '0' },
+              '100%': { transform: 'scale(1)', opacity: '1' }
+            },
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-8px)' }
+            },
+            pulseSoft: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.7' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
+    
+    html {
+      transition: background-color 0.5s ease, color 0.5s ease;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #F8F4E6;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6z' fill='%23A8D5BA' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+    }
+
+    .dark body {
+      background-color: #2F5039;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 12c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6z' fill='%23C4E4B5' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+    }
+
+    h1, h2, h3 {
+      font-family: 'Playfair Display', serif;
+    }
+    .stagger-1 { animation-delay: 0.1s; }
+    .stagger-2 { animation-delay: 0.2s; }
+    .stagger-3 { animation-delay: 0.3s; }
+    
+    .glass {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      transition: background 0.5s ease, border 0.5s ease;
+    }
+
+    .dark .glass {
+      background: rgba(47, 80, 57, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(168, 213, 186, 0.3);
+      border-radius: 10px;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+</head>
+<body class="bg-cream text-forest-dark dark:bg-forest-dark dark:text-cream min-h-screen transition-colors duration-500 selection:bg-leaf selection:text-forest-dark">
+  <div id="root"></div>
+</body>
+</html>

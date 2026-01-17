@@ -1,0 +1,8 @@
+{
+  "name": "Zero-Point Food Planner",
+  "description": "An AI-powered sustainability tool that generates waste-free meal plans based on expiring ingredients and pantry stock, including creative scrap usage suggestions.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
